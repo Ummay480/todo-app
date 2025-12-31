@@ -8,7 +8,7 @@ from src.services.task_service import TaskService
 
 
 def handle_list(args: argparse.Namespace, storage: TaskStorage) -> int:
-    """Handle the 'list' command.
+    """Handle the 'list' command with optional filters.
 
     Args:
         args: Parsed command-line arguments
@@ -17,23 +17,56 @@ def handle_list(args: argparse.Namespace, storage: TaskStorage) -> int:
     Returns:
         Exit code (0 for success)
     """
-    tasks = storage.get_all_tasks()
+    # Apply filters if provided
+    status_filter = getattr(args, 'status', None)
+    category_filter = getattr(args, 'category', None)
+    tag_filter = getattr(args, 'tag', None)
+
+    if status_filter or category_filter or tag_filter:
+        tasks = storage.filter_tasks(
+            status=status_filter,
+            category=category_filter,
+            tag=tag_filter
+        )
+        filter_desc = []
+        if status_filter:
+            filter_desc.append(f"status={status_filter}")
+        if category_filter:
+            filter_desc.append(f"category={category_filter}")
+        if tag_filter:
+            filter_desc.append(f"tag={tag_filter}")
+        filter_text = f" (filtered by: {', '.join(filter_desc)})"
+    else:
+        tasks = storage.get_all_tasks()
+        filter_text = ""
 
     if not tasks:
-        print("No tasks found.")
+        print(f"No tasks found{filter_text}.")
         print('Suggestion: Add a task with: todo add "Your task title"')
+        if filter_text:
+            print('Or try different filters')
         return 0
 
     # Display header
-    print("\nTODO List")
+    print(f"\nTODO List{filter_text}")
     print("=" * 50)
     print(f"Total: {len(tasks)} task{'s' if len(tasks) != 1 else ''}\n")
 
     # Display each task
     for task in tasks:
         status_icon = "○" if task["status"] == "pending" else "✓"
-        print(f"  {status_icon} [{task['id']}] {task['title']}")
-        print(f"      Status: {task['status']}")
+        title_line = f"  {status_icon} [{task['id']}] {task['title']}"
+        print(title_line)
+
+        # Show category and tags if present
+        meta = []
+        if task.get("category"):
+            meta.append(f"Category: {task['category']}")
+        if task.get("tags"):
+            meta.append(f"Tags: {', '.join(task['tags'])}")
+        meta.append(f"Status: {task['status']}")
+
+        print(f"      {' | '.join(meta)}")
         print()
 
     return 0
@@ -143,7 +176,7 @@ def handle_update(args: argparse.Namespace, storage: TaskStorage) -> int:
 
 
 def handle_add(args: argparse.Namespace, service: TaskService) -> int:
-    """Handle the 'add' command.
+    """Handle the 'add' command with category and tags.
 
     Args:
         args: Parsed command-line arguments
@@ -153,9 +186,16 @@ def handle_add(args: argparse.Namespace, service: TaskService) -> int:
         Exit code (0 for success, 1 for error)
     """
     title = args.title
+    category = getattr(args, 'category', None)
+    tags_str = getattr(args, 'tags', None)
+
+    # Parse tags from comma-separated string
+    tags = None
+    if tags_str:
+        tags = [tag.strip() for tag in tags_str.split(',') if tag.strip()]
 
     # Add task via service
-    result = service.add_task(title)
+    result = service.add_task(title, category=category, tags=tags)
 
     if result["success"]:
         # Success case
@@ -169,6 +209,15 @@ def handle_add(args: argparse.Namespace, service: TaskService) -> int:
         else:
             # Normal success
             print(f"✓ Task added: \"{task['title']}\" (ID: {task['id']})")
+
+        # Show category and tags if present
+        meta = []
+        if task.get("category"):
+            meta.append(f"Category: {task['category']}")
+        if task.get("tags"):
+            meta.append(f"Tags: {', '.join(task['tags'])}")
+        if meta:
+            print(f"  {' | '.join(meta)}")
 
         return 0
     else:
@@ -207,9 +256,14 @@ def main() -> NoReturn:
     # 'add' command
     add_parser = subparsers.add_parser("add", help="Add a new task")
     add_parser.add_argument("title", type=str, help="Title of the task to add")
+    add_parser.add_argument("--category", type=str, help="Category for the task")
+    add_parser.add_argument("--tags", type=str, help="Comma-separated tags (e.g., urgent,work)")
 
     # 'list' command
     list_parser = subparsers.add_parser("list", help="List all tasks")
+    list_parser.add_argument("--status", type=str, choices=["pending", "completed"], help="Filter by status")
+    list_parser.add_argument("--category", type=str, help="Filter by category")
+    list_parser.add_argument("--tag", type=str, help="Filter by tag")
 
     # 'complete' command
     complete_parser = subparsers.add_parser("complete", help="Mark a task as completed")

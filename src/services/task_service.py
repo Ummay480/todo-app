@@ -2,7 +2,7 @@
 
 from typing import Dict, Any, Optional
 from src.lib.storage import TaskStorage
-from src.models.task import Task, is_valid_title
+from src.models.task import Task, is_valid_title, create_task
 
 
 class TaskService:
@@ -20,14 +20,21 @@ class TaskService:
         """
         self._storage = storage
 
-    def add_task(self, title: str) -> Dict[str, Any]:
-        """Add a new task with the given title.
+    def add_task(
+        self,
+        title: str,
+        category: str | None = None,
+        tags: list[str] | None = None
+    ) -> Dict[str, Any]:
+        """Add a new task with the given title, category, and tags.
 
         Validates the title, checks for duplicates, and creates a new task
         with auto-generated ID and default "pending" status.
 
         Args:
             title: The task title to add
+            category: Optional category for organization
+            tags: Optional list of tags
 
         Returns:
             Dictionary with:
@@ -37,7 +44,7 @@ class TaskService:
                 - error (str): Error message if validation failed (if success=False)
 
         Examples:
-            >>> service.add_task("Buy groceries")
+            >>> service.add_task("Buy groceries", category="personal", tags=["shopping"])
             {'success': True, 'task': {...}, 'warning': None}
 
             >>> service.add_task("")
@@ -74,13 +81,15 @@ class TaskService:
                 f"A task with this title already exists (ID: {existing_id})"
             )
 
-        # Create new task
+        # Create new task with category and tags
         task_id = self._storage.generate_id()
-        task: Task = {
-            "id": task_id,
-            "title": title,
-            "status": "pending",
-        }
+        task = create_task(
+            task_id=task_id,
+            title=title,
+            status="pending",
+            category=category,
+            tags=tags
+        )
 
         # Add to storage
         self._storage.add_task(task)
