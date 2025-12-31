@@ -150,3 +150,32 @@ class TaskStorage:
                 self._save()
                 return True
         return False
+
+    def filter_tasks(
+        self,
+        status: str | None = None,
+        category: str | None = None,
+        tag: str | None = None
+    ) -> list[Task]:
+        """Filter tasks by status, category, or tag.
+
+        Args:
+            status: Filter by status (pending/completed)
+            category: Filter by category
+            tag: Filter by tag (matches if tag is in task's tags list)
+
+        Returns:
+            List of tasks matching all specified filters
+        """
+        filtered = self._tasks.copy()
+
+        if status:
+            filtered = [t for t in filtered if t.get("status") == status]
+
+        if category:
+            filtered = [t for t in filtered if t.get("category") == category]
+
+        if tag:
+            filtered = [t for t in filtered if tag in t.get("tags", [])]
+
+        return filtered
