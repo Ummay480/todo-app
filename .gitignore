@@ -67,3 +67,7 @@ Thumbs.db
 
 # Project specific
 nul
+
+# Todo app data files
+tasks.json
+tasks.json.bak

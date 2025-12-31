@@ -1,20 +1,28 @@
-"""In-memory storage for Todo tasks"""
+"""File-based persistent storage for Todo tasks"""
 
+import json
+import os
 from typing import List
 from src.models.task import Task
 
 
 class TaskStorage:
-    """Manages in-memory storage of tasks.
+    """Manages persistent storage of tasks in a JSON file.
 
-    This class provides CRUD operations for tasks stored in a Python list.
-    All operations are deterministic and suitable for single-session CLI use.
+    This class provides CRUD operations for tasks with automatic file persistence.
+    All operations are deterministic and tasks persist across CLI runs.
     """
 
-    def __init__(self) -> None:
-        """Initialize empty task storage with ID counter"""
+    def __init__(self, filename: str = "tasks.json") -> None:
+        """Initialize task storage with file persistence.
+
+        Args:
+            filename: Path to JSON file for storing tasks (default: tasks.json)
+        """
+        self._filename = filename
         self._tasks: List[Task] = []
         self._next_id: int = 1
+        self._load()
 
     def generate_id(self) -> int:
         """Generate next unique task ID.
@@ -29,13 +37,49 @@ class TaskStorage:
         self._next_id += 1
         return task_id
 
+    def _load(self) -> None:
+        """Load tasks from JSON file.
+
+        Reads tasks from the file and determines the next available ID.
+        Creates an empty file if it doesn't exist.
+        """
+        if os.path.exists(self._filename):
+            try:
+                with open(self._filename, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self._tasks = data.get("tasks", [])
+                    # Calculate next ID based on existing tasks
+                    if self._tasks:
+                        max_id = max(task["id"] for task in self._tasks)
+                        self._next_id = max_id + 1
+            except (json.JSONDecodeError, KeyError):
+                # If file is corrupted, start fresh
+                self._tasks = []
+                self._next_id = 1
+        else:
+            # Create empty file
+            self._save()
+
+    def _save(self) -> None:
+        """Save tasks to JSON file.
+
+        Writes all tasks to the file in a deterministic format.
+        """
+        data = {
+            "tasks": self._tasks,
+            "next_id": self._next_id
+        }
+        with open(self._filename, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
     def add_task(self, task: Task) -> None:
-        """Add a task to storage.
+        """Add a task to storage and save to file.
 
         Args:
             task: Task dictionary with id, title, and status fields
         """
         self._tasks.append(task)
+        self._save()
 
     def get_all_tasks(self) -> List[Task]:
         """Retrieve all tasks from storage.
@@ -73,7 +117,7 @@ class TaskStorage:
         return None
 
     def update_task(self, task_id: int, **updates) -> bool:
-        """Update a task's fields.
+        """Update a task's fields and save to file.
 
         Args:
             task_id: The ID of the task to update
@@ -87,11 +131,12 @@ class TaskStorage:
                 for key, value in updates.items():
                     if key in task:
                         task[key] = value  # type: ignore
+                self._save()
                 return True
         return False
 
     def delete_task(self, task_id: int) -> bool:
-        """Delete a task by its ID.
+        """Delete a task by its ID and save to file.
 
         Args:
             task_id: The ID of the task to delete
@@ -102,5 +147,6 @@ class TaskStorage:
         for i, task in enumerate(self._tasks):
             if task["id"] == task_id:
                 self._tasks.pop(i)
+                self._save()
                 return True
         return False
